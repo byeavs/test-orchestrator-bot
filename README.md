@@ -5,7 +5,7 @@ Telegram-бот для запуска тестов через GitHub Actions.
 ## Запуск
 
 ```bash
-cp .env.example .env  # заполни значения
+cp .env.example .env 
 pip install -r requirements.txt
 python bot.py
 ```
