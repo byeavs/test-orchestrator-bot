@@ -1,3 +1,5 @@
+from typing import Optional
+
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
@@ -21,8 +23,8 @@ def main_menu_kb() -> InlineKeyboardMarkup:
 def after_run_kb(run_url: str) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.row(
-        InlineKeyboardButton(text="🔁 Retry", callback_data="retry"),
-        InlineKeyboardButton(text="📊 Status", callback_data="status"),
+        InlineKeyboardButton(text="🔁 Retry",       callback_data="retry"),
+        InlineKeyboardButton(text="📊 Status",      callback_data="status"),
     )
     builder.row(
         InlineKeyboardButton(text="🔗 Open on GitHub", url=run_url),
@@ -30,17 +32,21 @@ def after_run_kb(run_url: str) -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
-def status_kb(run_url: str) -> InlineKeyboardMarkup:
+def status_kb(run_url: str, allure_url: Optional[str] = None) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.row(
-        InlineKeyboardButton(text="🔄 Refresh", callback_data="status"),
-        InlineKeyboardButton(text="🔁 Retry", callback_data="retry"),
+        InlineKeyboardButton(text="🔄 Refresh",        callback_data="status"),
+        InlineKeyboardButton(text="🔁 Retry",          callback_data="retry"),
     )
     builder.row(
         InlineKeyboardButton(text="🔗 Open on GitHub", url=run_url),
     )
+    if allure_url:
+        builder.row(
+            InlineKeyboardButton(text="📊 Allure Report", url=allure_url),
+        )
     builder.row(
-        InlineKeyboardButton(text="🏠 Main Menu", callback_data="menu"),
+        InlineKeyboardButton(text="🏠 Main Menu",      callback_data="menu"),
     )
     return builder.as_markup()
 

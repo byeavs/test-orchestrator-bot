@@ -25,24 +25,26 @@ CONCLUSION_EMOJI = {
     "action_required": "⚠️",
 }
 
+
 @dataclass
 class WorkflowRun:
-    run_id:int
-    status:str
-    conclusion:Optional[str]
-    html_url:str
-    created_at:str
-    jobs_url:str
+    run_id: int
+    status: str
+    conclusion: Optional[str]
+    html_url: str
+    created_at: str
+    jobs_url: str
+
 
 @dataclass
 class JobStatus:
-    name:str
-    status:str
-    conclusion:Optional[str]
+    name: str
+    status: str
+    conclusion: Optional[str]
 
 
 class GitHubService:
-    def __init__(self, token:str, repo:str, workflow_id:str, branch:str = "main"):
+    def __init__(self, token: str, repo: str, workflow_id: str, branch: str = "main"):
         self.token = token
         self.repo = repo
         self.workflow_id = workflow_id
@@ -52,9 +54,14 @@ class GitHubService:
             "Accept": "application/vnd.github+json",
             "X-GitHub-Api-Version": "2022-11-28",
         }
-        self._last_run_id:Optional[int] = None
+        self._last_run_id: Optional[int] = None
 
-    async def dispatch_workflow(self, inputs:Optional[dict] = None) -> bool:
+    # ------------------------------------------------------------------ #
+    #  Trigger                                                           #
+    # ------------------------------------------------------------------ #
+
+    async def dispatch_workflow(self, inputs: Optional[dict] = None) -> bool:
+        """Trigger workflow_dispatch. Returns True on success."""
         url = f"{GITHUB_API}/repos/{self.repo}/actions/workflows/{self.workflow_id}/dispatches"
         payload = {"ref": self.branch}
         if inputs:
@@ -64,6 +71,7 @@ class GitHubService:
             async with session.post(url, headers=self._headers, json=payload) as resp:
                 if resp.status == 204:
                     logger.info("Workflow dispatched successfully")
+                    # Give GitHub a moment to register the run
                     await asyncio.sleep(3)
                     run = await self.get_latest_run()
                     if run:
@@ -73,6 +81,10 @@ class GitHubService:
                     text = await resp.text()
                     logger.error("Dispatch failed %s: %s", resp.status, text)
                     return False
+
+    # ------------------------------------------------------------------ #
+    #  Runs                                                              #
+    # ------------------------------------------------------------------ #
 
     async def get_latest_run(self) -> Optional[WorkflowRun]:
         """Fetch the most recent run for this workflow."""
@@ -98,7 +110,7 @@ class GitHubService:
                     jobs_url=r["jobs_url"],
                 )
 
-    async def get_run_by_id(self, run_id:int) -> Optional[WorkflowRun]:
+    async def get_run_by_id(self, run_id: int) -> Optional[WorkflowRun]:
         url = f"{GITHUB_API}/repos/{self.repo}/actions/runs/{run_id}"
         async with aiohttp.ClientSession() as session:
             async with session.get(url, headers=self._headers) as resp:
@@ -114,7 +126,11 @@ class GitHubService:
                     jobs_url=r["jobs_url"],
                 )
 
-    async def get_jobs(self, run:WorkflowRun) -> list[JobStatus]:
+    # ------------------------------------------------------------------ #
+    #  Jobs                                                              #
+    # ------------------------------------------------------------------ #
+
+    async def get_jobs(self, run: WorkflowRun) -> list[JobStatus]:
         async with aiohttp.ClientSession() as session:
             async with session.get(run.jobs_url, headers=self._headers) as resp:
                 if resp.status != 200:
@@ -129,8 +145,12 @@ class GitHubService:
                     for j in data.get("jobs", [])
                 ]
 
-    async def get_status_text(self) -> tuple[str, Optional[str]]:
-        """Returns (status_message, run_url)."""
+    # ------------------------------------------------------------------ #
+    #  Formatted status                                                  #
+    # ------------------------------------------------------------------ #
+
+    async def get_status_text(self) -> tuple[str, Optional[str], Optional[str]]:
+        """Returns (status_message, run_url, allure_url)."""
         run_id = self._last_run_id
         if run_id:
             run = await self.get_run_by_id(run_id)
@@ -138,7 +158,7 @@ class GitHubService:
             run = await self.get_latest_run()
 
         if not run:
-            return "⚠️ No runs found for this workflow.", None
+            return "⚠️ No runs found for this workflow.", None, None
 
         jobs = await self.get_jobs(run)
 
@@ -159,11 +179,16 @@ class GitHubService:
                 emoji = STATUS_EMOJI.get(run.status, "❓")
                 lines.append(f"{emoji} Status: {run.status}")
 
-        return "\n".join(lines), run.html_url
+        allure_url = None
+        if run.status == "completed":
+            owner, repo = self.repo.split("/")
+            allure_url = f"https://{owner}.github.io/{repo}/allure-report"
+
+        return "\n".join(lines), run.html_url, allure_url
 
     @property
     def last_run_id(self) -> Optional[int]:
         return self._last_run_id
 
-    def set_last_run_id(self, run_id:int):
+    def set_last_run_id(self, run_id: int):
         self._last_run_id = run_id

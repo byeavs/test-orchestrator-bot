@@ -24,15 +24,18 @@ _SUITE_LABELS = {
 
 def setup_callbacks_router(github: GitHubService) -> Router:
 
+    # ------------------------------------------------------------------ #
+    #  run:<suite>                                                       #
+    # ------------------------------------------------------------------ #
     @router.callback_query(F.data.startswith("run:"))
     async def cb_run(call: CallbackQuery):
-        suite = call.data.split(":")[1]
+        suite = call.data.split(":")[1]          # all | ui | api | e2e
         label = _SUITE_LABELS.get(suite, suite.upper())
 
         await call.message.edit_text(f"⏳ Triggering <b>{label}</b> tests…")
         await call.answer()
 
-        inputs = {} if suite == "all" else {"suite": suite}
+        inputs = {"test_suite": suite}
         ok = await github.dispatch_workflow(inputs=inputs)
 
         if ok:
@@ -50,17 +53,23 @@ def setup_callbacks_router(github: GitHubService) -> Router:
                 reply_markup=back_to_menu_kb(),
             )
 
+    # ------------------------------------------------------------------ #
+    #  status                                                            #
+    # ------------------------------------------------------------------ #
     @router.callback_query(F.data == "status")
     async def cb_status(call: CallbackQuery):
         await call.message.edit_text("🔄 Fetching status…")
         await call.answer()
 
-        text, url = await github.get_status_text()
+        text, url, allure_url = await github.get_status_text()
         if url:
-            await call.message.edit_text(text, reply_markup=status_kb(url))
+            await call.message.edit_text(text, reply_markup=status_kb(url, allure_url))
         else:
             await call.message.edit_text(text, reply_markup=back_to_menu_kb())
 
+    # ------------------------------------------------------------------ #
+    #  retry                                                             #
+    # ------------------------------------------------------------------ #
     @router.callback_query(F.data == "retry")
     async def cb_retry(call: CallbackQuery):
         await call.message.edit_text("🔁 Retrying last workflow…")
@@ -80,12 +89,15 @@ def setup_callbacks_router(github: GitHubService) -> Router:
                 reply_markup=back_to_menu_kb(),
             )
 
+    # ------------------------------------------------------------------ #
+    #  menu                                                              #
+    # ------------------------------------------------------------------ #
     @router.callback_query(F.data == "menu")
     async def cb_menu(call: CallbackQuery):
         await call.answer()
         await call.message.edit_text(
             "👋 <b>QA Automation Bot</b>\n\n"
-            "Manage your test pipeline directly from Telegram.\n"
+            "Manage test pipeline.\n"
             "Choose an action below:",
             reply_markup=main_menu_kb(),
         )
