@@ -102,3 +102,6 @@ GITHUB_BRANCH=    # main
 - no request queue — two simultaneous dispatches create two runs
 
 ---
+## Example
+### Telegram bot
+<img width="329" height="398" alt="IMG_9383" src="https://github.com/user-attachments/assets/24712db3-db7d-413d-848a-5f1c624533be" />
