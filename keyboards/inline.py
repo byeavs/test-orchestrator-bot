@@ -13,6 +13,7 @@ def main_menu_kb() -> InlineKeyboardMarkup:
         InlineKeyboardButton(text="🖥 Run UI",  callback_data="run:ui"),
         InlineKeyboardButton(text="🔌 Run API", callback_data="run:api"),
         InlineKeyboardButton(text="🔁 Run E2E", callback_data="run:e2e"),
+        InlineKeyboardButton(text="📱 Run Mobile", callback_data="run:mobile"),
     )
     builder.row(
         InlineKeyboardButton(text="📊 Status", callback_data="status"),
