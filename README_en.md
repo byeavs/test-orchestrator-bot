@@ -75,8 +75,8 @@ docker-compose up -d
 
 ```env
 BOT_TOKEN=        # from @BotFather
-GITHUB_TOKEN=     # Personal Access Token (scope: repo)
-GITHUB_REPO=      # owner/repo — the test repository
+GITHUB_TOKEN=     # Personal Access Token
+GITHUB_REPO=      # the test repository
 WORKFLOW_ID=      # tests.yml
 GITHUB_BRANCH=    # main
 ```
