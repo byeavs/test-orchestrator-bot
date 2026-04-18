@@ -102,3 +102,7 @@ GITHUB_BRANCH=    # main
 - нет очереди запросов — два одновременных dispatch создадут два run
 
 ---
+## Примеры
+### Telegram бот
+<img width="329" height="398" alt="IMG_9383" src="https://github.com/user-attachments/assets/24712db3-db7d-413d-848a-5f1c624533be" />
+
