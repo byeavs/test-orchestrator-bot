@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Callable, Awaitable
 
 import aiohttp
 
@@ -43,6 +43,9 @@ class JobStatus:
     conclusion: Optional[str]
 
 
+NotifyCallback = Callable[[str], Awaitable[None]]
+
+
 class GitHubService:
     def __init__(self, token: str, repo: str, workflow_id: str, branch: str = "main"):
         self.token = token
@@ -71,7 +74,6 @@ class GitHubService:
             async with session.post(url, headers=self._headers, json=payload) as resp:
                 if resp.status == 204:
                     logger.info("Workflow dispatched successfully")
-                    # Give GitHub a moment to register the run
                     await asyncio.sleep(3)
                     run = await self.get_latest_run()
                     if run:
@@ -87,7 +89,6 @@ class GitHubService:
     # ------------------------------------------------------------------ #
 
     async def get_latest_run(self) -> Optional[WorkflowRun]:
-        """Fetch the most recent run for this workflow."""
         url = (
             f"{GITHUB_API}/repos/{self.repo}/actions/workflows/"
             f"{self.workflow_id}/runs?per_page=1&branch={self.branch}"
@@ -101,14 +102,7 @@ class GitHubService:
                 if not runs:
                     return None
                 r = runs[0]
-                return WorkflowRun(
-                    run_id=r["id"],
-                    status=r["status"],
-                    conclusion=r.get("conclusion"),
-                    html_url=r["html_url"],
-                    created_at=r["created_at"],
-                    jobs_url=r["jobs_url"],
-                )
+                return self._parse_run(r)
 
     async def get_run_by_id(self, run_id: int) -> Optional[WorkflowRun]:
         url = f"{GITHUB_API}/repos/{self.repo}/actions/runs/{run_id}"
@@ -117,14 +111,17 @@ class GitHubService:
                 if resp.status != 200:
                     return None
                 r = await resp.json()
-                return WorkflowRun(
-                    run_id=r["id"],
-                    status=r["status"],
-                    conclusion=r.get("conclusion"),
-                    html_url=r["html_url"],
-                    created_at=r["created_at"],
-                    jobs_url=r["jobs_url"],
-                )
+                return self._parse_run(r)
+
+    def _parse_run(self, r: dict) -> WorkflowRun:
+        return WorkflowRun(
+            run_id = r["id"],
+            status = r["status"],
+            conclusion = r.get("conclusion"),
+            html_url = r["html_url"],
+            created_at = r["created_at"],
+            jobs_url = r["jobs_url"],
+        )
 
     # ------------------------------------------------------------------ #
     #  Jobs                                                              #
@@ -138,30 +135,26 @@ class GitHubService:
                 data = await resp.json()
                 return [
                     JobStatus(
-                        name=j["name"],
-                        status=j["status"],
-                        conclusion=j.get("conclusion"),
+                        name = j["name"],
+                        status = j["status"],
+                        conclusion = j.get("conclusion"),
                     )
                     for j in data.get("jobs", [])
                 ]
 
     # ------------------------------------------------------------------ #
-    #  Formatted status                                                  #
+    #  Formatted status (/status command)                                #
     # ------------------------------------------------------------------ #
 
     async def get_status_text(self) -> tuple[str, Optional[str], Optional[str]]:
         """Returns (status_message, run_url, allure_url)."""
-        run_id = self._last_run_id
-        if run_id:
-            run = await self.get_run_by_id(run_id)
-        else:
-            run = await self.get_latest_run()
+        run = await self.get_run_by_id(self._last_run_id) if self._last_run_id \
+              else await self.get_latest_run()
 
         if not run:
             return "⚠️ No runs found for this workflow.", None, None
 
         jobs = await self.get_jobs(run)
-
         lines = [f"<b>Run #{run.run_id}</b>  •  <i>{run.created_at[:10]}</i>\n"]
 
         if jobs:
@@ -172,19 +165,81 @@ class GitHubService:
                     emoji = STATUS_EMOJI.get(job.status, "❓")
                 lines.append(f"{emoji}  <code>{job.name}</code>: {job.conclusion or job.status}")
         else:
-            if run.status == "completed":
-                emoji = CONCLUSION_EMOJI.get(run.conclusion or "", "❓")
-                lines.append(f"{emoji} Overall: {run.conclusion}")
-            else:
-                emoji = STATUS_EMOJI.get(run.status, "❓")
-                lines.append(f"{emoji} Status: {run.status}")
+            emoji = CONCLUSION_EMOJI.get(run.conclusion or "", "❓") \
+                    if run.status == "completed" \
+                    else STATUS_EMOJI.get(run.status, "❓")
+            lines.append(f"{emoji} Status: {run.conclusion or run.status}")
 
         allure_url = None
         if run.status == "completed":
-            owner, repo = self.repo.split("/")
-            allure_url = f"https://{owner}.github.io/{repo}/allure-report"
+            owner, repo_name = self.repo.split("/")
+            allure_url = f"https://{owner}.github.io/{repo_name}/allure-report"
 
         return "\n".join(lines), run.html_url, allure_url
+
+    # ------------------------------------------------------------------ #
+    #  Auto-notify: poll until complete                                  #
+    # ------------------------------------------------------------------ #
+
+    async def poll_until_complete(
+        self,
+        run_id: int,
+        on_complete: NotifyCallback,
+        interval: int = 30,
+        timeout: int = 60 * 40,
+    ) -> None:
+        """
+        Background task. Polls every `interval` seconds.
+        Calls on_complete(text) when run finishes or times out.
+        """
+        elapsed = 0
+        while elapsed < timeout:
+            await asyncio.sleep(interval)
+            elapsed += interval
+            try:
+                run = await self.get_run_by_id(run_id)
+            except Exception as exc:
+                logger.warning("poll error: %s", exc)
+                continue
+
+            if run and run.status == "completed":
+                summary = await self._format_summary(run)
+                await on_complete(summary)
+                return
+
+        run_url = f"https://github.com/{self.repo}/actions/runs/{run_id}"
+        await on_complete(
+            f"⚠️ <b>Run #{run_id}</b> — no result after {timeout // 60} min\n"
+            f'<a href="{run_url}">Check on GitHub</a>'
+        )
+
+    async def _format_summary(self, run: WorkflowRun) -> str:
+
+        overall = CONCLUSION_EMOJI.get(run.conclusion or "", "❓")
+        lines = [
+            f"{overall} <b>Run #{run.run_id}</b> — <code>{run.conclusion or run.status}</code>\n"
+        ]
+
+        jobs = await self.get_jobs(run)
+        for job in jobs:
+            if any(x in job.name.lower() for x in ("allure", "report")):
+                continue
+            emoji = CONCLUSION_EMOJI.get(job.conclusion or "", "❓")
+            lines.append(
+                f"{emoji} <code>{job.name}</code>: {job.conclusion or job.status}"
+            )
+
+        owner, repo_name = self.repo.split("/")
+        allure_url = f"https://{owner}.github.io/{repo_name}/allure-report"
+        lines.append(
+            f'\n<a href="{run.html_url}">🔗 GitHub Actions</a>  '
+            f'<a href="{allure_url}">📊 Allure Report</a>'
+        )
+        return "\n".join(lines)
+
+    # ------------------------------------------------------------------ #
+    #  Helpers                                                           #
+    # ------------------------------------------------------------------ #
 
     @property
     def last_run_id(self) -> Optional[int]:

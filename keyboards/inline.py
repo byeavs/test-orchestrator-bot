@@ -10,10 +10,13 @@ def main_menu_kb() -> InlineKeyboardMarkup:
         InlineKeyboardButton(text="🚀 Run ALL", callback_data="run:all"),
     )
     builder.row(
-        InlineKeyboardButton(text="🖥 Run UI",  callback_data="run:ui"),
+        InlineKeyboardButton(text="🖥 Run UI", callback_data="run:ui"),
         InlineKeyboardButton(text="🔌 Run API", callback_data="run:api"),
-        InlineKeyboardButton(text="🔁 Run E2E", callback_data="run:e2e"),
-        InlineKeyboardButton(text="📱 Run Mobile", callback_data="run:mobile"),
+        InlineKeyboardButton(text="🔁 Run E2E", callback_data="run:e2e")
+    )
+    builder.row(
+        InlineKeyboardButton(text="🔗 Run Integration", callback_data="run:interation"),
+        InlineKeyboardButton(text="📱 Run Mobile", callback_data="run:mobile")
     )
     builder.row(
         InlineKeyboardButton(text="📊 Status", callback_data="status"),
@@ -24,8 +27,8 @@ def main_menu_kb() -> InlineKeyboardMarkup:
 def after_run_kb(run_url: str) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.row(
-        InlineKeyboardButton(text="🔁 Retry",       callback_data="retry"),
-        InlineKeyboardButton(text="📊 Status",      callback_data="status"),
+        InlineKeyboardButton(text="🔁 Retry", callback_data="retry"),
+        InlineKeyboardButton(text="📊 Status", callback_data="status"),
     )
     builder.row(
         InlineKeyboardButton(text="🔗 Open on GitHub", url=run_url),
@@ -36,8 +39,8 @@ def after_run_kb(run_url: str) -> InlineKeyboardMarkup:
 def status_kb(run_url: str, allure_url: Optional[str] = None) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.row(
-        InlineKeyboardButton(text="🔄 Refresh",        callback_data="status"),
-        InlineKeyboardButton(text="🔁 Retry",          callback_data="retry"),
+        InlineKeyboardButton(text="🔄 Refresh", callback_data="status"),
+        InlineKeyboardButton(text="🔁 Retry", callback_data="retry"),
     )
     builder.row(
         InlineKeyboardButton(text="🔗 Open on GitHub", url=run_url),
@@ -47,7 +50,7 @@ def status_kb(run_url: str, allure_url: Optional[str] = None) -> InlineKeyboardM
             InlineKeyboardButton(text="📊 Allure Report", url=allure_url),
         )
     builder.row(
-        InlineKeyboardButton(text="🏠 Main Menu",      callback_data="menu"),
+        InlineKeyboardButton(text="🏠 Main Menu", callback_data="menu"),
     )
     return builder.as_markup()
 

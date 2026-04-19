@@ -39,12 +39,14 @@ async def main():
     dp.include_router(setup_callbacks_router(github))
 
     await bot.set_my_commands([
-        BotCommand(command="start",   description="Main menu"),
+        BotCommand(command="start", description="Main menu"),
         BotCommand(command="run_all", description="Run all tests"),
-        BotCommand(command="run_ui",  description="Run UI tests"),
+        BotCommand(command="run_ui", description="Run UI tests"),
         BotCommand(command="run_api", description="Run API tests"),
         BotCommand(command="run_e2e", description="Run E2E tests"),
-        BotCommand(command="status",  description="Check last run status"),
+        BotCommand(command="run_integration", 
+                   description="Run Integration tests"),
+        BotCommand(command="status", description="Check last run status"),
     ])
 
     logger.info("Bot started. Polling…")

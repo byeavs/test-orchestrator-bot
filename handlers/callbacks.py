@@ -1,3 +1,4 @@
+import asyncio
 import logging
 
 from aiogram import F, Router
@@ -16,9 +17,10 @@ router = Router()
 
 _SUITE_LABELS = {
     "all": "ALL",
-    "ui":  "UI",
+    "ui": "UI",
     "api": "API",
     "e2e": "E2E",
+    "interation": "INTEGRATION"
 }
 
 
@@ -29,23 +31,40 @@ def setup_callbacks_router(github: GitHubService) -> Router:
     # ------------------------------------------------------------------ #
     @router.callback_query(F.data.startswith("run:"))
     async def cb_run(call: CallbackQuery):
-        suite = call.data.split(":")[1]          # all | ui | api | e2e
+        suite = call.data.split(":")[1]
         label = _SUITE_LABELS.get(suite, suite.upper())
 
         await call.message.edit_text(f"⏳ Triggering <b>{label}</b> tests…")
         await call.answer()
 
-        inputs = {"test_suite": suite}
-        ok = await github.dispatch_workflow(inputs=inputs)
+        ok = await github.dispatch_workflow(inputs={"test_suite": suite})
 
         if ok:
             run = await github.get_latest_run()
             url = run.html_url if run else "https://github.com"
+
             await call.message.edit_text(
                 f"🚀 <b>{label}</b> pipeline triggered!\n\n"
-                "GitHub Actions is now processing your request.",
+                "I'll notify you when it's done.",
                 reply_markup=after_run_kb(url),
             )
+
+            if run:
+                bot = call.message.bot
+                chat_id = call.message.chat.id
+                run_id = run.run_id
+
+                async def notify(summary: str):
+                    try:
+                        await bot.send_message(chat_id, summary)
+                    except Exception as exc:
+                        logger.error("notify failed: %s", exc)
+
+                asyncio.create_task(
+                    github.poll_until_complete(run_id=run_id, on_complete=notify)
+                )
+            # ──────────────────────────────────────────────────────────
+
         else:
             await call.message.edit_text(
                 "❌ Failed to trigger workflow.\n"
@@ -79,10 +98,29 @@ def setup_callbacks_router(github: GitHubService) -> Router:
         if ok:
             run = await github.get_latest_run()
             url = run.html_url if run else "https://github.com"
+
             await call.message.edit_text(
-                "🔁 Workflow re-triggered successfully!",
+                "🔁 Workflow re-triggered!\n\n"
+                "I'll notify you when it's done.",
                 reply_markup=after_run_kb(url),
             )
+
+            if run:
+                bot = call.message.bot
+                chat_id = call.message.chat.id
+                run_id = run.run_id
+
+                async def notify_retry(summary: str):
+                    try:
+                        await bot.send_message(chat_id, summary)
+                    except Exception as exc:
+                        logger.error("notify_retry failed: %s", exc)
+
+                asyncio.create_task(
+                    github.poll_until_complete(run_id=run_id, on_complete=notify_retry)
+                )
+            # ──────────────────────────────────────────────────────────
+
         else:
             await call.message.edit_text(
                 "❌ Retry failed. Check token/repo settings.",
@@ -97,8 +135,7 @@ def setup_callbacks_router(github: GitHubService) -> Router:
         await call.answer()
         await call.message.edit_text(
             "👋 <b>QA Automation Bot</b>\n\n"
-            "Manage test pipeline.\n"
-            "Choose an action below:",
+            "Test pipeline.",
             reply_markup=main_menu_kb(),
         )
 
