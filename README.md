@@ -123,6 +123,7 @@ GITHUB_BRANCH=    # main
 
 ---
 
-## Скриншот
+## Скриншоты
 
 <img width="329" height="398" alt="IMG_9383" src="https://github.com/user-attachments/assets/24712db3-db7d-413d-848a-5f1c624533be" />
+<img width="340" height="397" alt="Снимок экрана — 2026-04-19 в 21 37 01" src="https://github.com/user-attachments/assets/a42ac620-cf83-4955-a373-26f5286ca2f6" />
